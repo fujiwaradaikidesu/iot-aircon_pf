@@ -1,11 +1,7 @@
 # IoT Aircon Controller
 
 ## 概要
-このプロジェクトは、クラウド上にデプロイした操作画面から自宅のエアコンをスマートに制御するためのシステムです。
-frontend/に操作画面を、backend/にmicro-python用の赤外線通信APIを実装しています。
-<操作画面>
-https://v0--xi-bice.vercel.app/
-meloncookie様の赤外線通信用ライブラリ( https://github.com/meloncookie/RemotePy.git )を利用させて頂いております。
+このプロジェクトは、クラウド上にデプロイした操作画面から自宅のエアコンをスマートに制御するためのシステムです。frontend/に操作画面( https://v0--xi-bice.vercel.app/ )を、backend/にmicro-python用の赤外線通信APIを実装しています。なおmeloncookie様の赤外線通信用ライブラリ( https://github.com/meloncookie/RemotePy.git )を利用させて頂いております。※操作画面はデモ用です。
 
 ## 特徴
 - 💻 TypeScriptベースのフロントエンドで直感的なUI/UX
