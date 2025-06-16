@@ -1,8 +1,8 @@
 import mqtt, { MqttClient } from 'mqtt';
 
-const MQTT_BROKER_URL = process.env.NEXT_PUBLIC_MQTT_BROKER_URL || 'wss://v604492f.ala.asia-southeast1.emqxsl.com:8084/mqtt';
-const MQTT_USERNAME = process.env.NEXT_PUBLIC_MQTT_USERNAME || 'user';
-const MQTT_PASSWORD = process.env.NEXT_PUBLIC_MQTT_PASSWORD || 'TBtDXZQPYbb2mzn';
+const MQTT_BROKER_URL = process.env.NEXT_PUBLIC_MQTT_BROKER_URL;
+const MQTT_USERNAME = process.env.NEXT_PUBLIC_MQTT_USERNAME;
+const MQTT_PASSWORD = process.env.NEXT_PUBLIC_MQTT_PASSWORD;
 
 class MQTTClient {
   private client: MqttClient | null = null;
