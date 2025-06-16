@@ -1,0 +1,3 @@
+[submodule "backend/RemotePy"]
+	path = backend/RemotePy
+	url = git@github.com:meloncookie/RemotePy.git
