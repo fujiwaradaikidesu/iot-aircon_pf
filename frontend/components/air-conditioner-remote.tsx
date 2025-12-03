@@ -2,24 +2,35 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import {
+  Alert,
   Box,
+  Button,
+  ButtonBase,
   Card,
   CardContent,
-  Typography,
+  Chip,
+  CircularProgress,
+  Divider,
+  Snackbar,
   Switch,
   ToggleButton,
   ToggleButtonGroup,
-  Button,
-  Divider,
-  CircularProgress,
-  Snackbar,
-  Alert,
+  Typography,
 } from "@mui/material"
-import { PowerSettingsNew, AcUnit, Whatshot, Air, ArrowUpward, ArrowDownward } from "@mui/icons-material"
 import { ThemeProvider, createTheme } from "@mui/material/styles"
-import { mqttClient } from '@/lib/mqttClient'
+import { AcUnit, Air, ArrowDownward, ArrowUpward, PowerSettingsNew, Whatshot } from "@mui/icons-material"
+
+import { mqttClient } from "@/lib/mqttClient"
+import {
+  DEFAULT_FAN_SPEED,
+  DEFAULT_TEMPERATURE,
+  FAN_SPEED_OPTIONS,
+  TEMPERATURE_OPTIONS,
+  type FanSpeedOption,
+  type TemperatureOption,
+} from "@/lib/controlOptions"
 
 // カスタムテーマの作成
 const theme = createTheme({
@@ -53,50 +64,51 @@ const theme = createTheme({
 })
 
 type Mode = "cool" | "heat"
-type Temperature = 23 | 25
+type Mode = "cool" | "heat"
+type Temperature = TemperatureOption
+type FanSpeed = FanSpeedOption
 
 export default function AirConditionerRemote() {
   const [power, setPower] = useState<boolean>(false)
   const [mode, setMode] = useState<Mode>("cool")
-  const [temperature, setTemperature] = useState<Temperature>(23)
+  const [temperature, setTemperature] = useState<Temperature>(DEFAULT_TEMPERATURE)
+  const [fanSpeed, setFanSpeed] = useState<FanSpeed>(DEFAULT_FAN_SPEED)
   const [loading, setLoading] = useState<boolean>(false)
   const [notification, setNotification] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
     open: false,
     message: "",
     severity: "success",
   })
-
-  const fanSpeed = 3 // 固定値
+  const [hasPendingChanges, setHasPendingChanges] = useState<boolean>(false)
 
   const handlePowerToggle = () => {
     const newPowerState = !power
     setPower(newPowerState)
-    sendCommand(newPowerState, mode, temperature, fanSpeed)
+    setHasPendingChanges(true)
   }
 
   const handleModeChange = (_event: React.MouseEvent<HTMLElement>, newMode: Mode) => {
     if (newMode !== null) {
       setMode(newMode)
-      sendCommand(power, newMode, temperature, fanSpeed)
+      setHasPendingChanges(true)
     }
   }
 
   const handleTemperatureChange = (newTemp: Temperature) => {
     setTemperature(newTemp)
-    sendCommand(power, mode, newTemp, fanSpeed)
+    setHasPendingChanges(true)
   }
 
-  const sendCommand = async (powerOn: boolean, acMode: Mode, temp: Temperature, fanSpeed: number) => {
-    if (!powerOn) {
-      // 電源OFFの場合は電源OFFコマンドのみ送信
-      await sendApiRequest(false, acMode, temp, fanSpeed)
-      return
-    }
-
+  const handleSendCommand = async () => {
     setLoading(true)
     try {
-      const result = await sendApiRequest(powerOn, acMode, temp, fanSpeed)
-      console.log(result, "result")
+      await sendApiRequest(power, mode, temperature, fanSpeed)
+      setNotification({
+        open: true,
+        message: "コマンドを送信しました",
+        severity: "success",
+      })
+      setHasPendingChanges(false)
     } catch (error) {
       console.error("API request failed:", error)
       setNotification({
@@ -106,6 +118,15 @@ export default function AirConditionerRemote() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleTemperatureStep = (direction: "up" | "down") => {
+    const currentIndex = TEMPERATURE_OPTIONS.indexOf(temperature)
+    if (direction === "up" && currentIndex < TEMPERATURE_OPTIONS.length - 1) {
+      handleTemperatureChange(TEMPERATURE_OPTIONS[currentIndex + 1])
+    } else if (direction === "down" && currentIndex > 0) {
+      handleTemperatureChange(TEMPERATURE_OPTIONS[currentIndex - 1])
     }
   }
 
@@ -133,6 +154,16 @@ export default function AirConditionerRemote() {
   const getTemperatureColor = () => {
     return mode === "cool" ? "#2196f3" : "#f44336"
   }
+
+  const canIncreaseTemp = useMemo(() => {
+    const idx = TEMPERATURE_OPTIONS.indexOf(temperature)
+    return idx < TEMPERATURE_OPTIONS.length - 1
+  }, [temperature])
+
+  const canDecreaseTemp = useMemo(() => {
+    const idx = TEMPERATURE_OPTIONS.indexOf(temperature)
+    return idx > 0
+  }, [temperature])
 
   return (
     <ThemeProvider theme={theme}>
@@ -183,45 +214,57 @@ export default function AirConditionerRemote() {
               transition: "opacity 0.3s ease",
             }}
           >
-            {/* 温度表示 */}
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                mb: 4,
-                height: 150,
-                position: "relative",
-              }}
-            >
-              <Box
-                sx={{
-                  width: 150,
-                  height: 150,
-                  borderRadius: "50%",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
-                  background: "white",
-                  position: "relative",
-                  border: `4px solid ${getTemperatureColor()}`,
-                }}
-              >
-                <Typography variant="h2" component="div" fontWeight="bold" color={getTemperatureColor()}>
-                  {temperature}
-                </Typography>
-                <Typography variant="h6" component="div" sx={{ position: "absolute", top: "60%" }}>
-                  ℃
-                </Typography>
-              </Box>
+            {hasPendingChanges && (
+              <Chip
+                color="warning"
+                label="未送信の変更があります"
+                size="small"
+                sx={{ mb: 2 }}
+              />
+            )}
 
-              <Box sx={{ position: "absolute", right: 0 }}>
+            {/* 温度表示 */}
+            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", mb: 4, position: "relative" }}>
+              <ButtonBase
+                onClick={handleSendCommand}
+                sx={{
+                  borderRadius: "50%",
+                  p: 0,
+                  display: "inline-flex",
+                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
+                }}
+                focusRipple
+                disabled={loading}
+              >
+                <Box
+                  sx={{
+                    width: 160,
+                    height: 160,
+                    borderRadius: "50%",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    background: "white",
+                    position: "relative",
+                    border: `4px solid ${getTemperatureColor()}`,
+                  }}
+                >
+                  <Typography variant="h2" component="div" fontWeight="bold" color={getTemperatureColor()}>
+                    {temperature}
+                  </Typography>
+                  <Typography variant="h6" component="div" sx={{ position: "absolute", top: "60%" }}>
+                    ℃
+                  </Typography>
+                </Box>
+              </ButtonBase>
+
+              <Box sx={{ position: "absolute", right: 0, display: "flex", flexDirection: "column" }}>
                 <Button
                   variant="contained"
                   color="primary"
                   sx={{ mb: 1, minWidth: 40, width: 40, height: 40, borderRadius: "50%" }}
-                  onClick={() => (temperature === 23 ? handleTemperatureChange(25) : null)}
+                  onClick={() => handleTemperatureStep("up")}
+                  disabled={!canIncreaseTemp}
                 >
                   <ArrowUpward />
                 </Button>
@@ -229,12 +272,17 @@ export default function AirConditionerRemote() {
                   variant="contained"
                   color="primary"
                   sx={{ minWidth: 40, width: 40, height: 40, borderRadius: "50%" }}
-                  onClick={() => (temperature === 25 ? handleTemperatureChange(23) : null)}
+                  onClick={() => handleTemperatureStep("down")}
+                  disabled={!canDecreaseTemp}
                 >
                   <ArrowDownward />
                 </Button>
               </Box>
             </Box>
+
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+              温度表示をタップしてコマンド送信
+            </Typography>
 
             {/* モード選択 */}
             <Typography variant="subtitle1" fontWeight="medium" sx={{ mb: 1 }}>
@@ -296,6 +344,17 @@ export default function AirConditionerRemote() {
                 {power ? ` ${mode === "cool" ? "冷房" : "暖房"} ${temperature}℃ 風量${fanSpeed}` : " オフ"}
               </Typography>
             </Box>
+
+            <Button
+              fullWidth
+              variant="contained"
+              color="primary"
+              sx={{ mt: 3, py: 1.5 }}
+              onClick={handleSendCommand}
+              disabled={loading}
+            >
+              {loading ? "送信中..." : "送信"}
+            </Button>
           </Box>
         </CardContent>
 

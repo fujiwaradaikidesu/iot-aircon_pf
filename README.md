@@ -47,6 +47,17 @@ cd frontend
 npm run dev
 ```
 
+ブラウザ上ではリモコンUIに加え、予約スケジュール管理カードが表示されます。  
+`.env.local` に以下のようなMQTT接続情報を設定しておくと、UIから予約の追加・編集・削除が行えます。
+
+```
+NEXT_PUBLIC_MQTT_BROKER_URL=wss://example.com:8083/mqtt
+NEXT_PUBLIC_MQTT_USERNAME=your-user
+NEXT_PUBLIC_MQTT_PASSWORD=your-pass
+```
+
+> `aircon/schedule/*` トピックは `iot-bridge` 側の `config.yaml` で定義したものと一致させてください。
+
 ### バックエンドの起動
 
 ```bash
