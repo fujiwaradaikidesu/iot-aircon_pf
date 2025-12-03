@@ -8,6 +8,7 @@ class MQTTClient {
   private client: MqttClient | null = null;
   private isConnected: boolean = false;
   private messageHandlers: Map<string, ((message: string) => void)[]> = new Map();
+  private pendingPublishes: { topic: string; message: string }[] = [];
 
   constructor() {
     this.connect();
@@ -26,6 +27,13 @@ class MQTTClient {
     this.client.on('connect', () => {
       console.log('MQTT Connected');
       this.isConnected = true;
+
+      // 再接続時に既存トピックへ再サブスクライブ
+      this.messageHandlers.forEach((_handlers, topic) => {
+        this.client?.subscribe(topic);
+      });
+
+      this.flushPendingPublishes();
     });
 
     this.client.on('message', (topic: string, message: Buffer) => {
@@ -51,29 +59,35 @@ class MQTTClient {
     if (this.client && this.isConnected) {
       this.client.publish(topic, message);
     } else {
-      console.error('MQTT client is not connected');
+      console.warn('MQTT client is not connected. Queueing publish request.');
+      this.pendingPublishes.push({ topic, message });
     }
   }
 
   public subscribe(topic: string, handler: (message: string) => void) {
+    if (!this.messageHandlers.has(topic)) {
+      this.messageHandlers.set(topic, []);
+    }
+    this.messageHandlers.get(topic)?.push(handler);
+
     if (this.client && this.isConnected) {
       this.client.subscribe(topic);
-      if (!this.messageHandlers.has(topic)) {
-        this.messageHandlers.set(topic, []);
-      }
-      this.messageHandlers.get(topic)?.push(handler);
     }
   }
 
   public unsubscribe(topic: string, handler: (message: string) => void) {
-    if (this.client && this.isConnected) {
-      this.client.unsubscribe(topic);
-      const handlers = this.messageHandlers.get(topic);
-      if (handlers) {
-        const index = handlers.indexOf(handler);
-        if (index !== -1) {
-          handlers.splice(index, 1);
-        }
+    const handlers = this.messageHandlers.get(topic);
+    if (!handlers) return;
+
+    const index = handlers.indexOf(handler);
+    if (index !== -1) {
+      handlers.splice(index, 1);
+    }
+
+    if (handlers.length === 0) {
+      this.messageHandlers.delete(topic);
+      if (this.client && this.isConnected) {
+        this.client.unsubscribe(topic);
       }
     }
   }
@@ -81,6 +95,16 @@ class MQTTClient {
   public disconnect() {
     if (this.client) {
       this.client.end();
+    }
+  }
+  private flushPendingPublishes() {
+    if (!this.client || !this.isConnected) {
+      return;
+    }
+
+    while (this.pendingPublishes.length > 0) {
+      const { topic, message } = this.pendingPublishes.shift()!;
+      this.client.publish(topic, message);
     }
   }
 }
